@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [ -z "$DEVKITPRO" ]; then
+    if [ -d "/opt/devkitpro" ]; then
+        export DEVKITPRO="/opt/devkitpro"
+    else
+        echo "Please set the DEVKITPRO environment variable."
+        exit 1
+    fi
+fi
+
+if [ ! -f "${DEVKITPRO}/cmake/Wii.cmake" ]; then
+    echo "${DEVKITPRO}/cmake/Wii.cmake does not exist. Have you set \$DEVKITPRO?";
+fi
+
+cmake -DCMAKE_TOOLCHAIN_FILE="${DEVKITPRO}/cmake/Wii.cmake" "$@"
