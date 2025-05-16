@@ -24,8 +24,6 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(GRRLIB)
 
-find_package(Python3 REQUIRED)
-
 set(SOURCE_FILES
     src/main.cpp
 )
@@ -37,6 +35,9 @@ set(DATA_FILES
 set(LIBRARIES
     grrlib
     jpeg
+    freetype
+    bz2
+    fat
 )
 
 function(generate_cpp_headers OUT_VAR)
@@ -51,7 +52,7 @@ function(generate_cpp_headers OUT_VAR)
 
         add_custom_command(
             OUTPUT ${output_file}
-            COMMAND ${Python3_EXECUTABLE} ${SCRIPT} ${CMAKE_SOURCE_DIR}/${input_file} ${output_file}
+            COMMAND "python3" ${SCRIPT} ${CMAKE_SOURCE_DIR}/${input_file} ${output_file}
             DEPENDS ${input_file} ${SCRIPT}
             COMMENT "Generating C++ header for ${input_file} -> ${output_file}"
             VERBATIM
@@ -70,16 +71,3 @@ add_executable(ff-wii ${SOURCE_FILES})
 target_link_libraries(ff-wii PRIVATE ${LIBRARIES})
 add_dependencies(ff-wii data-headers)
 ogc_create_dol(ff-wii)
-
-if (RUN_BIN)
-    if (NOT DOLPHIN_BIN AND RUN_BIN)
-        set(DOLPHIN_BIN "dolphin-emu")
-    endif()
-
-    add_custom_command(TARGET ff-wii POST_BUILD
-            COMMAND ${DOLPHIN_BIN}
-            ARGS "${CMAKE_CURRENT_BINARY_DIR}/ff-wii.dol"
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            COMMENT "Launching Dolphin with ff-wii.dol"
-    )
-endif()
