@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.11)
 project(ff-wii)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -12,7 +12,27 @@ if (NOT RUN_BIN)
     set(RUN_BIN On)
 endif()
 
-add_executable(ff-wii main.cpp)
+include_directories(include)
+
+include(FetchContent)
+FetchContent_Declare(
+    GRRLIB
+    GIT_REPOSITORY https://github.com/GRRLIB/GRRLIB.git
+    GIT_TAG origin/master
+)
+
+FetchContent_MakeAvailable(GRRLIB)
+
+set(SOURCE_FILES
+    src/main.cpp
+)
+
+set(LIBRARIES
+    grrlib
+)
+
+add_executable(ff-wii ${SOURCE_FILES})
+target_link_libraries(ff-wii PRIVATE ${LIBRARIES})
 ogc_create_dol(ff-wii)
 
 if (RUN_BIN)
