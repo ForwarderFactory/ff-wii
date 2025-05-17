@@ -17,27 +17,37 @@ include_directories(data-headers)
 
 include(FetchContent)
 FetchContent_Declare(
-    GRRLIB
-    GIT_REPOSITORY https://github.com/GRRLIB/GRRLIB.git
-    GIT_TAG origin/master
+        GRRLIB
+        GIT_REPOSITORY https://github.com/GRRLIB/GRRLIB.git
+        GIT_TAG origin/master
 )
-
 FetchContent_MakeAvailable(GRRLIB)
+FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG origin/master
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+add_subdirectory(${CMAKE_SOURCE_DIR}/libwinyl)
 
 set(SOURCE_FILES
-    src/main.cpp
+        src/main.cpp
 )
 
 set(DATA_FILES
-    data/img.jpg
+        data/pointer.png
+        data/font.ttf
 )
 
 set(LIBRARIES
-    grrlib
-    jpeg
-    freetype
-    bz2
-    fat
+        grrlib
+        jpeg
+        freetype
+        bz2
+        fat
+        nlohmann_json::nlohmann_json
+        winyl
 )
 
 function(generate_cpp_headers OUT_VAR)
@@ -51,11 +61,11 @@ function(generate_cpp_headers OUT_VAR)
         file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/data-headers")
 
         add_custom_command(
-            OUTPUT ${output_file}
-            COMMAND "python3" ${SCRIPT} ${CMAKE_SOURCE_DIR}/${input_file} ${output_file}
-            DEPENDS ${input_file} ${SCRIPT}
-            COMMENT "Generating C++ header for ${input_file} -> ${output_file}"
-            VERBATIM
+                OUTPUT ${output_file}
+                COMMAND "python3" ${SCRIPT} ${CMAKE_SOURCE_DIR}/${input_file} ${output_file}
+                DEPENDS ${input_file} ${SCRIPT}
+                COMMENT "Generating C++ header for ${input_file} -> ${output_file}"
+                VERBATIM
         )
 
         list(APPEND headers ${output_file})

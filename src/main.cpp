@@ -1,62 +1,144 @@
 #include <iostream>
-#include <thread>
 #include <chrono>
 #include <gccore.h>
 #include <wiiuse/wpad.h>
 #include <grrlib.h>
-#include <img.jpg.hpp>
+#include <ogc/system.h>
+#include <nlohmann/json.hpp>
 
-template <typename T, std::size_t U>
-class ImageHandler {
-    GRRLIB_texImg* img;
-public:
-    explicit ImageHandler(const std::array<T, U>& data) {
-        img = GRRLIB_LoadTextureJPG(data.data());
-        if (!img) {
-            throw std::runtime_error("Failed to load image");
+#include <img.hpp>
+#include <ttf.hpp>
+#include <font.ttf.hpp>
+#include <pointer.png.hpp>
+
+namespace ff {
+    class Context {
+        uint32_t buttons{};
+        int width{};
+        int height{};
+        double pointer_x{320};
+        double pointer_y{240};
+        double pointer_a{0};
+        bool pointer_validity{false};
+        std::unique_ptr<ff::ttf::TextHandler<std::uint8_t, font_ttf.size()>> ttf_ctx{};
+        std::unique_ptr<ff::img::ImageHandler<std::uint8_t, pointer_png.size()>> pointer_drawable{};
+    public:
+        explicit Context(bool console = false) {
+            if (!console) {
+                GRRLIB_Init();
+                WPAD_Init();
+                return;
+            }
+
+            VIDEO_Init();
+            WPAD_Init();
+
+            const auto rmode = VIDEO_GetPreferredMode(nullptr);
+            const auto xfb = MEM_K0_TO_K1(SYS_AllocateFramebuffer(rmode));
+
+            width = rmode->fbWidth;
+            height = rmode->efbHeight;
+
+            console_init(xfb,20,20,rmode->fbWidth,rmode->xfbHeight,rmode->fbWidth*VI_DISPLAY_PIX_SZ);
+
+            VIDEO_Configure(rmode);
+            VIDEO_SetNextFramebuffer(xfb);
+            VIDEO_SetBlack(FALSE);
+            VIDEO_Flush();
+            VIDEO_WaitVSync();
+
+            if(rmode->viTVMode&VI_NON_INTERLACE) {
+                VIDEO_WaitVSync();
+            }
         }
-    }
-    void draw() const {
-        if (!img) {
-            throw std::runtime_error("Image not loaded");
+
+        static void flush() noexcept {
+            GRRLIB_Render();
+            GRRLIB_FillScreen(0x000000FF);
         }
-        GRRLIB_DrawImg(10, 50, img, 0, 1, 1, 0xFFFFFFFF);
-        GRRLIB_Render();
-    }
-    ~ImageHandler() noexcept {
-        if (img) {
-            GRRLIB_FreeTexture(img);
+
+        ~Context() {
+            GRRLIB_Exit();
+            WPAD_Shutdown();
         }
-    }
-};
 
-void init() {
-    VIDEO_Init();
-    WPAD_Init();
+        void draw() {
+            if (this->pointer_validity) {
+                this->pointer_drawable->draw(img::ImageParameters{
+                    .x = static_cast<int>(this->pointer_x - 48),
+                    .y = static_cast<int>(this->pointer_y - 48),
+                    .scale_x = 1,
+                    .scale_y = 1,
+                    .angle = static_cast<int>(pointer_a),
+                });
+            }
 
-    /* seemingly only needed for console?
-    const auto rmode = VIDEO_GetPreferredMode(nullptr);
-    const auto xfb = MEM_K0_TO_K1(SYS_AllocateFramebuffer(rmode));
+            nlohmann::json test_json{};
+            test_json["xpos"] = this->pointer_x;
+            test_json["ypos"] = this->pointer_y;
+            test_json["angle"] = this->pointer_a;
+            test_json["valid"] = this->pointer_validity;
 
-    console_init(xfb,20,20,rmode->fbWidth,rmode->xfbHeight,rmode->fbWidth*VI_DISPLAY_PIX_SZ);
+            this->ttf_ctx->draw(ff::ttf::TextParameters{
+                .x = 0,
+                .y = 0,
+                .size = 12,
+                .color = 0xFFFFFFFF,
+                .text = test_json.dump(2),
+            });
 
-    VIDEO_Configure(rmode);
-    VIDEO_SetNextFramebuffer(xfb);
-    VIDEO_SetBlack(FALSE);
-    VIDEO_Flush();
-    VIDEO_WaitVSync();
+            flush();
+        }
 
-    if(rmode->viTVMode&VI_NON_INTERLACE) VIDEO_WaitVSync();
-    */
+        void main() {
+            WPAD_SetDataFormat(WPAD_CHAN_0, WPAD_FMT_BTNS_ACC_IR);
+            WPAD_SetVRes(0, 640, 480);
 
-    GRRLIB_Init();
+            this->ttf_ctx = std::make_unique<ff::ttf::TextHandler<std::uint8_t, font_ttf.size()>>(font_ttf);
+
+            const auto get_cursor_pos = [this]() {
+                ir_t ir{};
+                WPAD_IR(0, &ir);
+                if (ir.valid) {
+                    this->pointer_x = ir.x;
+                    this->pointer_y = ir.y;
+                    this->pointer_a = ir.angle;
+                }
+                this->pointer_validity = ir.valid;
+            };
+
+            const auto get_buttons = [this]() {
+                WPAD_ScanPads();
+                this->buttons = WPAD_ButtonsDown(0);
+            };
+
+            this->pointer_drawable = std::make_unique<ff::img::ImageHandler<std::uint8_t, pointer_png.size()>>(pointer_png, ff::img::ImageFormat::PNG);
+            if (!this->pointer_drawable) {
+                throw std::runtime_error("Failed to load pointer image");
+            }
+
+            while (true) {
+                get_cursor_pos();
+                get_buttons();
+                draw();
+
+                if (this->buttons & WPAD_BUTTON_HOME) {
+                    break;
+                }
+
+                // is it not a problem not to sleep at all?
+            }
+        }
+    };
+
+    std::shared_ptr<ff::Context> context = nullptr;
 }
 
 int main() {
-    init();
-
-    const auto ptr = std::make_unique<ImageHandler<std::uint8_t, img_jpg.size()>>(img_jpg);
-    ptr->draw();
-
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    try {
+        ff::context = std::make_shared<ff::Context>(false);
+        ff::context->main();
+    } catch (const std::exception&) {
+        // TODO: print debug message on the screen
+    }
 }
