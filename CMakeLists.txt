@@ -29,8 +29,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/libwinyl)
-
 set(SOURCE_FILES
         src/main.cpp
 )
@@ -47,7 +45,6 @@ set(LIBRARIES
         bz2
         fat
         nlohmann_json::nlohmann_json
-        winyl
 )
 
 function(generate_cpp_headers OUT_VAR)

@@ -2,6 +2,8 @@
 
 Forwarder Factory for the Nintendo Wii
 
+TODO: Port ssock to Wii and use it here.
+
 ## Building
 
 As far as I can tell, this only builds on an Arch Linux host, and quite frankly I cannot be bothered to port it to anything else.
