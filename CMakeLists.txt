@@ -45,6 +45,8 @@ set(LIBRARIES
         bz2
         fat
         nlohmann_json::nlohmann_json
+        asnd
+        mad
 )
 
 function(generate_cpp_headers OUT_VAR)

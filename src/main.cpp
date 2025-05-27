@@ -6,21 +6,28 @@
 #include <img.hpp>
 #include <ttf.hpp>
 #include <sys.hpp>
+#include <audio.hpp>
+
 #include <font.ttf.hpp>
 #include <pointer.png.hpp>
+#include <test.mp3.hpp>
 
 int main() {
     ff::sys::Context ctx{
-        ff::sys::ContextParams::Graphics | ff::sys::ContextParams::ControllerInput | ff::sys::ContextParams::IR | ff::sys::ContextParams::Filesystem,
+        ff::sys::ContextParams::Graphics | ff::sys::ContextParams::ControllerInput | ff::sys::ContextParams::IR | ff::sys::ContextParams::Filesystem | ff::sys::ContextParams::Audio,
         [&ctx]() {
             ff::ttf::TextHandler<std::uint8_t, ::font_ttf.size()> ttf_ctx(::font_ttf);
             ff::img::ImageHandler<std::uint8_t, ::pointer_png.size()> pointer_drawable(::pointer_png, ff::img::ImageFormat::PNG);
+            ff::audio::AudioHandler<std::uint8_t, ::test_mp3.size()> audio_handler(::test_mp3);
+
+            audio_handler.play();
 
             while (true) {
                 ctx.poll();
 
                 if (ctx.get_buttons().get_pressed() == ff::sys::ControllerButton::ButtonHome) {
-                    ff::sys::Context::exit(ff::sys::ShutdownType::ReturnToMenu);
+                    //ff::sys::Context::exit(ff::sys::ShutdownType::ReturnToMenu);
+                    ff::sys::Context::exit(ff::sys::ShutdownType::ReturnToLoader);
                     return EXIT_FAILURE; // unreachable anyway
                 }
 

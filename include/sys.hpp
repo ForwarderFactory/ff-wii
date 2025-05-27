@@ -7,6 +7,7 @@
 #include <gccore.h>
 #include <wiiuse/wpad.h>
 #include <fat.h>
+#include <asndlib.h>
 
 namespace ff::sys {
     enum class ContextParams {
@@ -14,10 +15,11 @@ namespace ff::sys {
         Graphics = 1 << 1,
         StdioReport = 1 << 2,
         Filesystem = 1 << 3,
-        GenericInput = 1 << 4,
-        IR = GenericInput | 1 << 5,
+        Audio = 1 << 4,
+        GenericInput = 1 << 5,
+        IR = GenericInput | 1 << 6,
         ControllerInput = IR,
-        Default = Graphics | ControllerInput | Filesystem,
+        Default = Graphics | ControllerInput | Filesystem | Audio,
     };
 
     inline ContextParams operator|(ContextParams lhs, ContextParams rhs) {
@@ -38,9 +40,9 @@ namespace ff::sys {
 
     enum class ShutdownType {
         ReturnToMenu = 0,
+        ReturnToLoader = 1,
         Shutdown = 2,
         Reboot = 3,
-        // todo: return to loader (hbc)
     };
 
     enum class ControllerButton {
@@ -56,6 +58,25 @@ namespace ff::sys {
         ButtonDown = WPAD_BUTTON_DOWN,
         ButtonLeft = WPAD_BUTTON_LEFT,
         ButtonRight = WPAD_BUTTON_RIGHT,
+    };
+
+    static constexpr long long make_title_id(const std::string& ascii) noexcept {
+        if (ascii.size() != 4) {
+            return 0;
+        }
+
+        long long id = 0x0001000100000000LL;
+        for (size_t i = 0; i < 4; ++i) {
+            id |= static_cast<long long>(static_cast<unsigned char>(ascii[i])) << (8 * (3 - i));
+        }
+        return id;
+    }
+
+    enum class TitleID : long long {
+        HAXX = make_title_id("HAXX"),
+        JODI = make_title_id("JODI"),
+        LULZ = make_title_id("LULZ"),
+        OHBC = make_title_id("OHBC"),
     };
 
     class ScreenDimensions {
@@ -110,12 +131,15 @@ namespace ff::sys {
     // if ContextParams::GenericInput is set
     struct Buttons final {
         [[nodiscard]] ControllerButton get_pressed() {
+            static_cast<void*>(this);
             return static_cast<ControllerButton>(WPAD_ButtonsDown(0));
         }
         [[nodiscard]] ControllerButton get_held() {
+            static_cast<void*>(this);
             return static_cast<ControllerButton>(WPAD_ButtonsHeld(0));
         }
         [[nodiscard]] ControllerButton get_up() {
+            static_cast<void*>(this);
             return static_cast<ControllerButton>(WPAD_ButtonsUp(0));
         }
 
@@ -137,7 +161,7 @@ namespace ff::sys {
             on_error(str);
         }
 
-        void raw_on_frame() {
+        void raw_on_frame() const {
             try {
                 if (this->on_frame) {
                     this->on_frame();
@@ -157,10 +181,16 @@ namespace ff::sys {
                 fatInitDefault();
             }
 
+            if (params & ContextParams::Audio) {
+                ASND_Init();
+            }
+
             if ((params & ContextParams::Graphics))
                 GRRLIB_Init();
             else
                 VIDEO_Init();
+
+            WII_Initialize();
 
             if (params & ContextParams::GenericInput) {
                 WPAD_Init();
@@ -196,6 +226,12 @@ namespace ff::sys {
             }
 
             this->raw_on_frame();
+        }
+
+        void load_title(TitleID id) const {
+            static_cast<void>(this);
+            WII_LaunchTitle(static_cast<long long>(id));
+            throw std::runtime_error{"WII_LaunchTitle() failed; this likely means that the title is not installed on the console."};
         }
 
         [[nodiscard]] ScreenDimensions get_screen_dimensions() const noexcept {
@@ -243,6 +279,15 @@ namespace ff::sys {
                 case ShutdownType::ReturnToMenu:
                     SYS_ResetSystem(SYS_RETURNTOMENU, 0, 0);
                     std::exit(EXIT_SUCCESS);
+                case ShutdownType::ReturnToLoader:
+                    for (const auto& it : { TitleID::HAXX, TitleID::JODI, TitleID::LULZ, TitleID::OHBC }) {
+                        try {
+                            WII_LaunchTitle(static_cast<long long>(it));
+                        } catch (const std::runtime_error&) {
+                        }
+                    }
+
+                    SYS_ResetSystem(SYS_RETURNTOMENU, 0, 0);
                 case ShutdownType::Shutdown:
                     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
                     std::exit(EXIT_SUCCESS);
@@ -260,6 +305,9 @@ namespace ff::sys {
             }
             if (params & ContextParams::GenericInput) {
                 WPAD_Shutdown();
+            }
+            if (params & ContextParams::Audio) {
+                ASND_End();
             }
         }
     };
